@@ -3,14 +3,14 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
-const { exec } = require('child_process');
+const ytdlp = require('yt-dlp-exec'); // 👉 substitui o exec
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 // 🔹 Configuração de CORS
 app.use(cors({
-  origin: "*", // 👉 troque pelo domínio do frontend em produção
+  origin: "*", // 👉 depois troque pelo domínio do frontend em produção
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type"]
 }));
@@ -23,13 +23,13 @@ if (!fs.existsSync(downloadsDir)) {
 app.use('/downloads', express.static(downloadsDir));
 
 app.get('/api/download', async (req, res) => {
-  const { url, type, quality } = req.query;
+  const { url, type } = req.query;
 
   if (!url) {
     return res.status(400).send('URL do YouTube inválida.');
   }
 
-  // 🔹 SSE headers (mantive igual ao seu código)
+  // 🔹 SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -45,36 +45,25 @@ app.get('/api/download', async (req, res) => {
   try {
     sendProgress({ statusText: 'Obtendo informações do vídeo...' });
 
-    // Definir formato
     const format = type === 'audio' ? 'bestaudio' : 'bestvideo+bestaudio';
     const outputTemplate = path.join(downloadsDir, '%(title)s.%(ext)s');
 
-    // Montar comando yt-dlp
-    const cmd = `yt-dlp -f ${format} -o "${outputTemplate}" "${url}"`;
+    console.log("▶️ Executando yt-dlp-exec...");
 
-    console.log("▶️ Executando:", cmd);
-
-    const process = exec(cmd);
-
-    process.stdout.on('data', (data) => {
-      console.log(data.toString());
-      // Se yt-dlp imprimir progresso, envia pro cliente
-      sendProgress({ statusText: data.toString().trim() });
+    // 👉 Agora usando a lib ao invés de exec()
+    const process = ytdlp(url, {
+      f: format,
+      o: outputTemplate,
+      progress: true,
+      dumpSingleJson: true
     });
 
-    process.stderr.on('data', (data) => {
-      console.error("⚠️ yt-dlp stderr:", data.toString());
-    });
-
-    process.on('close', (code) => {
-      if (code === 0) {
-        sendProgress({
-          statusText: 'Download completo!',
-          progress: 100,
-        });
-      } else {
-        sendProgress({ error: `yt-dlp falhou com código ${code}` });
-      }
+    process.then(() => {
+      sendProgress({ statusText: 'Download completo!', progress: 100 });
+      res.end();
+    }).catch(err => {
+      console.error("⚠️ yt-dlp erro:", err);
+      sendProgress({ error: "Falha ao baixar o vídeo." });
       res.end();
     });
 
