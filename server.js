@@ -3,14 +3,14 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
-const youtubedl = require('youtube-dl-exec'); // ✅ usamos este pacote, mais confiável
+const youtubedl = require('youtube-dl-exec'); // usando yt-dlp
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// 🔹 Configuração de CORS
+// Configuração de CORS
 app.use(cors({
-  origin: "*", // 👉 em produção troque pelo domínio do frontend
+  origin: "*",
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type"]
 }));
@@ -22,7 +22,7 @@ if (!fs.existsSync(downloadsDir)) {
 }
 app.use('/downloads', express.static(downloadsDir));
 
-// 🔹 Rota principal de download
+// Rota de download
 app.get('/api/download', async (req, res) => {
   const { url, type } = req.query;
 
@@ -30,7 +30,6 @@ app.get('/api/download', async (req, res) => {
     return res.status(400).send('URL do YouTube inválida.');
   }
 
-  // 🔹 SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -49,21 +48,20 @@ app.get('/api/download', async (req, res) => {
     const format = type === 'audio' ? 'bestaudio' : 'bestvideo+bestaudio';
     const outputTemplate = path.join(downloadsDir, '%(title)s.%(ext)s');
 
-    console.log("▶️ Executando youtube-dl-exec...");
+    console.log("▶️ Executando youtube-dl-exec com cookies...");
 
-    // ✅ Executa youtube-dl
     const process = youtubedl.exec(
       url,
       {
         format,
         output: outputTemplate,
         progress: true,
-        dumpSingleJson: true
+        dumpSingleJson: true,
+        cookies: path.join(__dirname, 'cookies.txt') // 👈 usa cookies.txt
       },
       { stdio: ['ignore', 'pipe', 'pipe'] }
     );
 
-    // Captura progresso pelo stderr
     process.stderr.on('data', (data) => {
       const str = data.toString();
       const match = str.match(/(\d+\.\d+)%/);
@@ -83,12 +81,12 @@ app.get('/api/download', async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ ERRO DETALHADO NO BACKEND:", error);
+    console.error("❌ ERRO DETALHADO:", error);
     sendProgress({ error: `Erro no servidor: ${error.message}` });
     res.end();
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor de backend rodando na porta ${PORT}`);
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
