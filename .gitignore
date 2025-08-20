@@ -1,4 +1,11 @@
-node_modules
+# dependências
+node_modules/
+
+# pasta de downloads (só gera no servidor)
+downloads/
+
+# variáveis de ambiente (segredo)
 .env
-.env.local
-downloads
+
+# logs
+*.log
