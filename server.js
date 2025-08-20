@@ -3,14 +3,14 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
-const youtubedl = require('youtube-dl-exec'); // usando yt-dlp embutido
+const youtubedl = require('yt-dlp-exec'); // usando yt-dlp
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 // Configuração de CORS
 app.use(cors({
-  origin: "*", // 👉 em produção troque pelo domínio do frontend
+  origin: "*",
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type"]
 }));
@@ -30,7 +30,6 @@ app.get('/api/download', async (req, res) => {
     return res.status(400).send('URL do YouTube inválida.');
   }
 
-  // Headers para SSE (progress bar no frontend)
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -46,13 +45,10 @@ app.get('/api/download', async (req, res) => {
   try {
     sendProgress({ statusText: 'Obtendo informações do vídeo...' });
 
-    // Define formato de saída
     const format = type === 'audio' ? 'bestaudio' : 'bestvideo+bestaudio';
+    const outputTemplate = path.join(downloadsDir, '%(title)s.%(ext)s');
 
-    // Template do nome do arquivo (evita caracteres inválidos)
-    const outputTemplate = path.join(downloadsDir, '%(title)s.%(id)s.%(ext)s');
-
-    console.log("▶️ Executando yt-dlp com cookies...");
+    console.log("▶️ Executando youtube-dl-exec com cookies...");
 
     const process = youtubedl.exec(
       url,
@@ -60,12 +56,12 @@ app.get('/api/download', async (req, res) => {
         format,
         output: outputTemplate,
         progress: true,
-        cookies: path.join(__dirname, 'cookies.txt') // 👈 usa cookies.txt
+        cookies: path.join(__dirname, 'cookies.txt') // usa cookies.txt
       },
       { stdio: ['ignore', 'pipe', 'pipe'] }
     );
 
-    // Captura progresso via stderr
+    // Captura progresso
     process.stderr.on('data', (data) => {
       const str = data.toString();
       const match = str.match(/(\d+\.\d+)%/);
@@ -75,7 +71,6 @@ app.get('/api/download', async (req, res) => {
       }
     });
 
-    // Quando finalizar
     process.on('close', (code) => {
       if (code === 0) {
         sendProgress({ statusText: 'Download completo!', progress: 100 });
@@ -92,7 +87,6 @@ app.get('/api/download', async (req, res) => {
   }
 });
 
-// Inicia o servidor
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
