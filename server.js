@@ -3,7 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
-const youtubedl = require('yt-dlp-exec'); // usando yt-dlp
+const youtubedl = require('yt-dlp-exec'); // certo: yt-dlp-exec
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -48,7 +48,7 @@ app.get('/api/download', async (req, res) => {
     const format = type === 'audio' ? 'bestaudio' : 'bestvideo+bestaudio';
     const outputTemplate = path.join(downloadsDir, '%(title)s.%(ext)s');
 
-    console.log("▶️ Executando youtube-dl-exec com cookies...");
+    console.log("▶️ Executando yt-dlp com cookies...");
 
     const process = youtubedl.exec(
       url,
@@ -56,14 +56,17 @@ app.get('/api/download', async (req, res) => {
         format,
         output: outputTemplate,
         progress: true,
-        cookies: path.join(__dirname, 'cookies.txt') // usa cookies.txt
+        // cookies se existir
+        cookies: path.join(__dirname, 'cookies.txt'),
       },
       { stdio: ['ignore', 'pipe', 'pipe'] }
     );
 
-    // Captura progresso
+    // Captura progresso e logs de erro do yt-dlp
     process.stderr.on('data', (data) => {
       const str = data.toString();
+      console.error("STDERR:", str); // 👈 mostra erro detalhado no terminal
+
       const match = str.match(/(\d+\.\d+)%/);
       if (match) {
         const progress = parseFloat(match[1]);
@@ -75,7 +78,7 @@ app.get('/api/download', async (req, res) => {
       if (code === 0) {
         sendProgress({ statusText: 'Download completo!', progress: 100 });
       } else {
-        sendProgress({ error: 'Falha no download.' });
+        sendProgress({ error: `Falha no download. Código de saída: ${code}` });
       }
       res.end();
     });
