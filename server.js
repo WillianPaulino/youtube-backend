@@ -3,7 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
-const ytdlp = require('yt-dlp-exec'); // 👉 substitui o exec
+const ytdlp = require('yt-dlp-exec');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -50,20 +50,33 @@ app.get('/api/download', async (req, res) => {
 
     console.log("▶️ Executando yt-dlp-exec...");
 
-    // 👉 Agora usando a lib ao invés de exec()
-    const process = ytdlp(url, {
+    // 🔹 Executando yt-dlp com progresso
+    ytdlp(url, {
       f: format,
       o: outputTemplate,
       progress: true,
-      dumpSingleJson: true
-    });
-
-    process.then(() => {
+      dumpSingleJson: true,
+      // callback de progresso
+      onProgress: (progress) => {
+        console.log("📊 Progresso:", progress);
+        sendProgress({
+          statusText: `Baixando: ${progress.percent || 0}%`,
+          progress: progress.percent || 0,
+          eta: progress.eta || null,
+          speed: progress.speed || null
+        });
+      }
+    })
+    .then(output => {
+      console.log("✅ yt-dlp finalizou:", output);
       sendProgress({ statusText: 'Download completo!', progress: 100 });
       res.end();
-    }).catch(err => {
-      console.error("⚠️ yt-dlp erro:", err);
-      sendProgress({ error: "Falha ao baixar o vídeo." });
+    })
+    .catch(err => {
+      console.error("⚠️ yt-dlp erro:", err.stderr || err.message || err);
+      sendProgress({
+        error: "Falha ao baixar o vídeo. Detalhes: " + (err.stderr || err.message || "erro desconhecido")
+      });
       res.end();
     });
 
