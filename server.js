@@ -3,14 +3,14 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
-const ytdlp = require('yt-dlp-exec');
+const youtubedl = require('youtube-dl-exec'); // ✅ usamos este pacote, mais confiável
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 // 🔹 Configuração de CORS
 app.use(cors({
-  origin: "*", // 👉 depois troque pelo domínio do frontend em produção
+  origin: "*", // 👉 em produção troque pelo domínio do frontend
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type"]
 }));
@@ -22,6 +22,7 @@ if (!fs.existsSync(downloadsDir)) {
 }
 app.use('/downloads', express.static(downloadsDir));
 
+// 🔹 Rota principal de download
 app.get('/api/download', async (req, res) => {
   const { url, type } = req.query;
 
@@ -48,35 +49,36 @@ app.get('/api/download', async (req, res) => {
     const format = type === 'audio' ? 'bestaudio' : 'bestvideo+bestaudio';
     const outputTemplate = path.join(downloadsDir, '%(title)s.%(ext)s');
 
-    console.log("▶️ Executando yt-dlp-exec...");
+    console.log("▶️ Executando youtube-dl-exec...");
 
-    // 🔹 Executando yt-dlp com progresso
-    ytdlp(url, {
-      f: format,
-      o: outputTemplate,
-      progress: true,
-      dumpSingleJson: true,
-      // callback de progresso
-      onProgress: (progress) => {
-        console.log("📊 Progresso:", progress);
-        sendProgress({
-          statusText: `Baixando: ${progress.percent || 0}%`,
-          progress: progress.percent || 0,
-          eta: progress.eta || null,
-          speed: progress.speed || null
-        });
+    // ✅ Executa youtube-dl
+    const process = youtubedl.exec(
+      url,
+      {
+        format,
+        output: outputTemplate,
+        progress: true,
+        dumpSingleJson: true
+      },
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+
+    // Captura progresso pelo stderr
+    process.stderr.on('data', (data) => {
+      const str = data.toString();
+      const match = str.match(/(\d+\.\d+)%/);
+      if (match) {
+        const progress = parseFloat(match[1]);
+        sendProgress({ statusText: 'Baixando...', progress });
       }
-    })
-    .then(output => {
-      console.log("✅ yt-dlp finalizou:", output);
-      sendProgress({ statusText: 'Download completo!', progress: 100 });
-      res.end();
-    })
-    .catch(err => {
-      console.error("⚠️ yt-dlp erro:", err.stderr || err.message || err);
-      sendProgress({
-        error: "Falha ao baixar o vídeo. Detalhes: " + (err.stderr || err.message || "erro desconhecido")
-      });
+    });
+
+    process.on('close', (code) => {
+      if (code === 0) {
+        sendProgress({ statusText: 'Download completo!', progress: 100 });
+      } else {
+        sendProgress({ error: 'Falha no download.' });
+      }
       res.end();
     });
 
